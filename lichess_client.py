@@ -59,7 +59,7 @@ def result_for(game: dict, username: str) -> str:
     return 'lose'
 
 if __name__ == "__main__":
-    username = 'M00n_Walker'
+    username = 'YOUR_USERNAME'
     raw_games = fetch_games(username, max_games=50)
     games = [parse_game(raw) for raw in raw_games]
 
