@@ -3,10 +3,10 @@ import requests
 import os
 from datetime import datetime, timezone
 
-def fetch_games(username: str, max_games: int | None = None) -> list[dict]:
-    url = f"https://lichess.org/api/games/user/{username}"
+def fetch_games(username: str, game_type: str, max_games: int = 0) -> list[dict]:
+    url = f"https://lichess.org/api/games/user/{username}?perfType={game_type}"
     params = {
-        "max": max_games, 
+        "max":"" if not max_games else max_games,
         "opening": "true", 
         "rated": 'true'
     }
@@ -21,7 +21,6 @@ def fetch_games(username: str, max_games: int | None = None) -> list[dict]:
         headers["Authorization"] = f'Bearer {token}'
         
     response = requests.get(url, params=params, headers=headers, timeout=30)
-    print(response.url)
 
     if response.status_code == 401:
         raise ValueError("Token is invalid or expired")
@@ -50,6 +49,16 @@ def parse_game(raw: dict) -> dict:
         "opening_name": opening.get("name"),
     }
 
+def get_player_rating(game: dict, player_id: str) -> int | None:
+    for player in game['players'].values():
+        user = player.get('user')
+        if user and user.get('id') == player_id.lower():
+            rating = player.get('rating')
+            if rating is None:
+                return None
+            return rating + player.get('ratingDiff', 0)
+    return None
+
 def result_for(game: dict, username: str) -> str:
     if game["winner"] is None:
         return 'draw'
@@ -59,13 +68,17 @@ def result_for(game: dict, username: str) -> str:
     return 'lose'
 
 if __name__ == "__main__":
-    username = 'YOUR_USERNAME'
-    raw_games = fetch_games(username, max_games=50)
+    username = 'M00n_Walker'
+    game_type = 'rapid'
+    raw_games = fetch_games(username, game_type)
     games = [parse_game(raw) for raw in raw_games]
+    rating = get_player_rating(raw_games[0], username) if raw_games else None
 
     results = [result_for(game, username) for game in games]
     print(
-        "wins:", results.count("win"),
-        "losses:", results.count("lose"),
-        "draws:", results.count("draw"),
+        f'game type: {game_type}',
+        f'wins: {results.count("win")}',
+        f'losses: {results.count("lose")}',
+        f'draws: {results.count("draw")}',
+        f'rating: {rating}', sep='\n'
         )
