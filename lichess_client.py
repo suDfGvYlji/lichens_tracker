@@ -78,17 +78,17 @@ def result_for(game: dict, username: str) -> str:
     return 'lose'
 
 if __name__ == "__main__":
-    username = 'M00n_Walker'
+    username = 'YOUR_NICKNAME'
     game_type = 'rapid'
     raw_games = fetch_games(username, game_type)
     games = [parse_game(raw) for raw in raw_games]
     ratings = build_rating_series(raw_games, username, game_type)
 
     results = [result_for(game, username) for game in games]
-    print(len(ratings), ratings[:5], ratings[-1] if ratings else None)
-
-    model = fit_line(ratings)
-    
-    print("slope per game:", round(model["slope"], 3))
-    print("R2:", round(model["r_squared"], 3))
-    print("in 50 games:", round(predict(model, 50)))
+    print(
+        f'game type: {game_type}',
+        f'wins: {results.count("win")}',
+        f'losses: {results.count("lose")}',
+        f'draws: {results.count("draw")}',
+        f'rating: {rating}', sep='\n'
+        )
