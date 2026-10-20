@@ -2,6 +2,7 @@ import json
 import requests
 import os
 from datetime import datetime, timezone
+from analytics import fit_line, predict
 
 def fetch_games(username: str, game_type: str, max_games: int = 0) -> list[dict]:
     url = f"https://lichess.org/api/games/user/{username}?perfType={game_type}"
@@ -15,10 +16,6 @@ def fetch_games(username: str, game_type: str, max_games: int = 0) -> list[dict]
         "Accept": "application/x-ndjson",
         "User-Agent": "Mozilla/5.0 (compatible; chess-tracker/0.1)"
     }
-    
-    token = os.environ.get("LICHESS_TOKEN")
-    if token:
-        headers["Authorization"] = f'Bearer {token}'
         
     response = requests.get(url, params=params, headers=headers, timeout=30)
 
@@ -49,16 +46,29 @@ def parse_game(raw: dict) -> dict:
         "opening_name": opening.get("name"),
     }
 
-def get_player_rating(game: dict, player_id: str) -> int | None:
+def get_player_rating(game: dict, username: str, skip_provisional: bool = True) -> int | None:
     for player in game['players'].values():
         user = player.get('user')
-        if user and user.get('id') == player_id.lower():
-            rating = player.get('rating')
-            if rating is None:
+        if user and user.get('id') == username.lower():
+            if skip_provisional and player.get('provisional'):
                 return None
-            return rating + player.get('ratingDiff', 0)
+            rating = player.get('rating')
+            diff = player.get("ratingDiff")
+            if rating is None or diff is None:
+                return None
+            return rating + diff
     return None
 
+def build_rating_series(raw_games: list[dict], username: str, speed: str) -> list[int]:
+    series = []
+    for game in reversed(raw_games):
+        if game.get('speed') != speed:
+            continue
+        rating = get_player_rating(game, username)
+        if rating is not None:
+            series.append(rating)
+    return series
+ 
 def result_for(game: dict, username: str) -> str:
     if game["winner"] is None:
         return 'draw'
@@ -72,13 +82,13 @@ if __name__ == "__main__":
     game_type = 'rapid'
     raw_games = fetch_games(username, game_type)
     games = [parse_game(raw) for raw in raw_games]
-    rating = get_player_rating(raw_games[0], username) if raw_games else None
+    ratings = build_rating_series(raw_games, username, game_type)
 
     results = [result_for(game, username) for game in games]
-    print(
-        f'game type: {game_type}',
-        f'wins: {results.count("win")}',
-        f'losses: {results.count("lose")}',
-        f'draws: {results.count("draw")}',
-        f'rating: {rating}', sep='\n'
-        )
+    print(len(ratings), ratings[:5], ratings[-1] if ratings else None)
+
+    model = fit_line(ratings)
+    
+    print("slope per game:", round(model["slope"], 3))
+    print("R2:", round(model["r_squared"], 3))
+    print("in 50 games:", round(predict(model, 50)))
